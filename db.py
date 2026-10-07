@@ -1,8 +1,4 @@
-"""Conexão com o Supabase (PostgreSQL) e funções de acesso aos dados.
-
-As credenciais vêm dos secrets do Streamlit (st.secrets), configurados no
-Streamlit Cloud ou no arquivo .streamlit/secrets.toml local.
-"""
+"""Conexão com o Supabase (PostgreSQL) e funções de acesso aos dados."""
 import pandas as pd
 import psycopg2
 import psycopg2.extras
@@ -10,7 +6,6 @@ import streamlit as st
 
 
 def _conectar():
-    """Abre conexão com o Supabase usando os secrets do Streamlit."""
     return psycopg2.connect(
         host=st.secrets["db_host"],
         port=st.secrets["db_port"],
@@ -21,13 +16,11 @@ def _conectar():
 
 
 def consultar(sql, params=None) -> pd.DataFrame:
-    """Executa um SELECT e devolve um DataFrame."""
     with _conectar() as cn:
         return pd.read_sql(sql, cn, params=params)
 
 
 def executar(sql, params=None):
-    """Executa um INSERT/UPDATE/DELETE."""
     with _conectar() as cn:
         cur = cn.cursor()
         cur.execute(sql, params or ())
@@ -35,7 +28,21 @@ def executar(sql, params=None):
 
 
 # ---------------------------------------------------------------------------
-# Funções específicas do domínio
+# Autenticação
+# ---------------------------------------------------------------------------
+def autenticar_usuario(nome: str, senha_hash: str):
+    """Retorna dict com id e nome se autenticado, ou None."""
+    df = consultar(
+        "SELECT id, nome FROM usuario WHERE nome = %s AND senha = %s AND ativo = TRUE",
+        (nome, senha_hash),
+    )
+    if df.empty:
+        return None
+    return {"id": int(df.iloc[0]["id"]), "nome": str(df.iloc[0]["nome"])}
+
+
+# ---------------------------------------------------------------------------
+# Usuários, tipos e veículos
 # ---------------------------------------------------------------------------
 def listar_usuarios() -> pd.DataFrame:
     return consultar("SELECT id, nome FROM usuario WHERE ativo = TRUE ORDER BY nome")
@@ -56,14 +63,16 @@ def listar_veiculos() -> pd.DataFrame:
     )
 
 
-def inserir_despesa(data, id_usuario, id_tipo, id_veiculo, qtde, valor, km, obs):
+# ---------------------------------------------------------------------------
+# Despesas
+# ---------------------------------------------------------------------------
+def inserir_despesa(data, id_usuario, id_tipo, id_veiculo, qtde, valor, valor_unit, km, obs):
     executar(
         """INSERT INTO despesa
-           (data, id_usuario, id_tipo, id_veiculo, qtde, valor, km, observacao)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-        (data, id_usuario, id_tipo, id_veiculo, qtde, valor, km, obs),
+           (data, id_usuario, id_tipo, id_veiculo, qtde, valor, valor_unit, km, observacao)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+        (data, id_usuario, id_tipo, id_veiculo, qtde, valor, valor_unit, km, obs),
     )
-    # atualiza o km atual do veículo, se o km informado for maior
     if id_veiculo and km:
         executar(
             """UPDATE veiculo SET kmatual = %s
@@ -73,11 +82,10 @@ def inserir_despesa(data, id_usuario, id_tipo, id_veiculo, qtde, valor, km, obs)
 
 
 def carregar_despesas(data_ini, data_fim) -> pd.DataFrame:
-    """Carrega as despesas do período com os nomes de tipo, usuário e veículo."""
     return consultar(
         """SELECT d.id, d.data, u.nome AS usuario, t.nome AS tipo,
-                  v.placa AS veiculo, d.qtde, d.valor, d.km, d.observacao,
-                  d.id_veiculo
+                  v.placa AS veiculo, d.qtde, d.valor_unit, d.valor, d.km,
+                  d.observacao, d.id_veiculo
              FROM despesa d
              LEFT JOIN usuario u ON u.id = d.id_usuario
              LEFT JOIN tipo_despesa t ON t.id = d.id_tipo
@@ -92,8 +100,8 @@ def excluir_despesa(id_despesa):
     executar("DELETE FROM despesa WHERE id = %s", (id_despesa,))
 
 
-def adicionar_usuario(nome):
-    executar("INSERT INTO usuario (nome) VALUES (%s)", (nome,))
+def adicionar_usuario(nome, senha_hash):
+    executar("INSERT INTO usuario (nome, senha) VALUES (%s, %s)", (nome, senha_hash))
 
 
 def adicionar_tipo(nome):

@@ -387,3 +387,41 @@ elif pagina == "Cadastros":
                 carregar_auxiliares.clear()
             except Exception as e:
                 st.error(f"Erro ao adicionar veículo: {e}")
+
+    # -----------------------------------------------------------------------
+    # Trocar senha
+    # -----------------------------------------------------------------------
+    st.divider()
+    st.markdown("### 🔑 Trocar minha senha")
+    st.caption(f"Usuário logado: **{st.session_state['usuario_logado']}**")
+
+    with st.form("trocar_senha", clear_on_submit=True):
+        senha_atual   = st.text_input("Senha atual", type="password")
+        nova_senha    = st.text_input("Nova senha", type="password")
+        confirma_senha = st.text_input("Confirmar nova senha", type="password")
+        trocar = st.form_submit_button("Salvar nova senha", type="primary")
+
+    if trocar:
+        if not senha_atual or not nova_senha or not confirma_senha:
+            st.error("Preencha todos os campos.")
+        elif nova_senha != confirma_senha:
+            st.error("A nova senha e a confirmação não coincidem.")
+        elif len(nova_senha) < 4:
+            st.error("A nova senha deve ter ao menos 4 caracteres.")
+        else:
+            # verifica se a senha atual está correta
+            resultado = db.autenticar_usuario(
+                st.session_state["usuario_logado"],
+                _hash(senha_atual)
+            )
+            if resultado is None:
+                st.error("Senha atual incorreta.")
+            else:
+                try:
+                    db.trocar_senha(
+                        st.session_state["usuario_id"],
+                        _hash(nova_senha)
+                    )
+                    st.success("Senha alterada com sucesso!")
+                except Exception as e:
+                    st.error(f"Erro ao trocar senha: {e}")

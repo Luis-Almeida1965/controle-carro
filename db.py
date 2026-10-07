@@ -104,6 +104,13 @@ def adicionar_usuario(nome, senha_hash):
     executar("INSERT INTO usuario (nome, senha) VALUES (%s, %s)", (nome, senha_hash))
 
 
+def trocar_senha(id_usuario, nova_senha_hash):
+    executar(
+        "UPDATE usuario SET senha = %s WHERE id = %s",
+        (nova_senha_hash, id_usuario)
+    )
+
+
 def adicionar_tipo(nome):
     executar("INSERT INTO tipo_despesa (nome) VALUES (%s)", (nome,))
 

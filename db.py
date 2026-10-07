@@ -121,3 +121,17 @@ def adicionar_veiculo(placa, modelo, datacompra, kmatual, id_usuario):
            VALUES (%s, %s, %s, %s, %s)""",
         (placa, modelo, datacompra, kmatual, id_usuario),
     )
+
+
+def alterar_veiculo(id_veiculo, placa, modelo, datacompra, kmatual, id_usuario):
+    executar(
+        """UPDATE veiculo
+              SET placa = %s, modelo = %s, datacompra = %s,
+                  kmatual = %s, id_usuario = %s
+            WHERE id = %s""",
+        (placa, modelo, datacompra, kmatual, id_usuario, id_veiculo),
+    )
+
+
+def excluir_veiculo(id_veiculo):
+    executar("UPDATE veiculo SET ativo = FALSE WHERE id = %s", (id_veiculo,))

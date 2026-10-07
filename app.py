@@ -355,38 +355,129 @@ elif pagina == "Cadastros":
                 st.error("Informe o nome.")
 
     st.divider()
-    st.markdown("### Veículos")
+    st.markdown("### 🚗 Veículos")
     st.dataframe(veiculos, use_container_width=True, hide_index=True)
 
-    with st.form("novo_veiculo", clear_on_submit=True):
-        st.markdown("**Cadastrar novo veículo**")
-        cv1, cv2, cv3 = st.columns(3)
-        v_placa = cv1.text_input("Placa")
-        v_modelo = cv2.text_input("Modelo")
-        v_dono = cv3.selectbox("Proprietário", usuarios["nome"] if not usuarios.empty else [])
+    aba_add_v, aba_edit_v, aba_del_v = st.tabs(["➕ Incluir", "✏️ Alterar", "🗑️ Excluir"])
 
-        cv4, cv5 = st.columns(2)
-        v_datacompra = cv4.date_input("Data da compra", value=date.today(), format="DD/MM/YYYY")
-        v_kmatual = cv5.number_input("KM atual", min_value=0.0, step=1.0, format="%.1f")
+    # -----------------------------------------------------------------------
+    # ABA — Incluir veículo
+    # -----------------------------------------------------------------------
+    with aba_add_v:
+        with st.form("novo_veiculo", clear_on_submit=True):
+            st.markdown("**Cadastrar novo veículo**")
+            cv1, cv2, cv3 = st.columns(3)
+            v_placa = cv1.text_input("Placa")
+            v_modelo = cv2.text_input("Modelo")
+            v_dono = cv3.selectbox("Proprietário", usuarios["nome"] if not usuarios.empty else [])
 
-        add_v = st.form_submit_button("Adicionar veículo")
+            cv4, cv5 = st.columns(2)
+            v_datacompra = cv4.date_input("Data da compra", value=date.today(), format="DD/MM/YYYY")
+            v_kmatual = cv5.number_input("KM atual", min_value=0.0, step=1.0, format="%.1f")
 
-    if add_v:
-        if not v_placa.strip():
-            st.error("Informe a placa.")
-        elif usuarios.empty:
-            st.error("Cadastre um usuário antes.")
+            add_v = st.form_submit_button("Adicionar veículo", type="primary")
+
+        if add_v:
+            if not v_placa.strip():
+                st.error("Informe a placa.")
+            elif usuarios.empty:
+                st.error("Cadastre um usuário antes.")
+            else:
+                id_dono = int(usuarios.loc[usuarios["nome"] == v_dono, "id"].iloc[0])
+                try:
+                    db.adicionar_veiculo(
+                        v_placa.strip().upper(), v_modelo.strip() or None,
+                        v_datacompra, v_kmatual or None, id_dono,
+                    )
+                    st.success("Veículo adicionado. Recarregue a página.")
+                    carregar_auxiliares.clear()
+                except Exception as e:
+                    st.error(f"Erro ao adicionar veículo: {e}")
+
+    # -----------------------------------------------------------------------
+    # ABA — Alterar veículo
+    # -----------------------------------------------------------------------
+    with aba_edit_v:
+        if veiculos.empty:
+            st.info("Nenhum veículo cadastrado.")
         else:
-            id_dono = int(usuarios.loc[usuarios["nome"] == v_dono, "id"].iloc[0])
-            try:
-                db.adicionar_veiculo(
-                    v_placa.strip().upper(), v_modelo.strip() or None,
-                    v_datacompra, v_kmatual or None, id_dono,
+            st.markdown("**Selecione o veículo para alterar**")
+            v_sel_placa = st.selectbox(
+                "Veículo", veiculos["placa"], key="sel_veiculo_editar"
+            )
+            v_sel = veiculos[veiculos["placa"] == v_sel_placa].iloc[0]
+
+            with st.form("editar_veiculo", clear_on_submit=False):
+                ec1, ec2, ec3 = st.columns(3)
+                e_placa = ec1.text_input("Placa", value=v_sel["placa"])
+                e_modelo = ec2.text_input("Modelo", value=v_sel["modelo"] or "")
+                e_dono_atual = v_sel["usuario"] if v_sel["usuario"] else usuarios["nome"].iloc[0]
+                e_dono = ec3.selectbox(
+                    "Proprietário",
+                    usuarios["nome"],
+                    index=int(usuarios["nome"].tolist().index(e_dono_atual))
+                    if e_dono_atual in usuarios["nome"].tolist() else 0,
                 )
-                st.success("Veículo adicionado. Recarregue a página.")
-                carregar_auxiliares.clear()
-            except Exception as e:
-                st.error(f"Erro ao adicionar veículo: {e}")
+
+                ec4, ec5 = st.columns(2)
+                e_datacompra = ec4.date_input(
+                    "Data da compra",
+                    value=pd.to_datetime(v_sel["datacompra"]).date()
+                    if v_sel["datacompra"] is not None else date.today(),
+                    format="DD/MM/YYYY",
+                )
+                e_kmatual = ec5.number_input(
+                    "KM atual",
+                    min_value=0.0, step=1.0, format="%.1f",
+                    value=float(v_sel["kmatual"]) if v_sel["kmatual"] else 0.0,
+                )
+
+                salvar_v = st.form_submit_button("Salvar alterações", type="primary")
+
+            if salvar_v:
+                if not e_placa.strip():
+                    st.error("Informe a placa.")
+                else:
+                    id_dono_e = int(usuarios.loc[usuarios["nome"] == e_dono, "id"].iloc[0])
+                    try:
+                        db.alterar_veiculo(
+                            int(v_sel["id"]),
+                            e_placa.strip().upper(),
+                            e_modelo.strip() or None,
+                            e_datacompra,
+                            e_kmatual or None,
+                            id_dono_e,
+                        )
+                        st.success("Veículo atualizado com sucesso! Recarregue a página.")
+                        carregar_auxiliares.clear()
+                    except Exception as e:
+                        st.error(f"Erro ao alterar veículo: {e}")
+
+    # -----------------------------------------------------------------------
+    # ABA — Excluir veículo
+    # -----------------------------------------------------------------------
+    with aba_del_v:
+        if veiculos.empty:
+            st.info("Nenhum veículo cadastrado.")
+        else:
+            st.markdown("**Selecione o veículo para excluir**")
+            v_del_placa = st.selectbox(
+                "Veículo", veiculos["placa"], key="sel_veiculo_excluir"
+            )
+            v_del = veiculos[veiculos["placa"] == v_del_placa].iloc[0]
+
+            st.warning(
+                f"Você está prestes a excluir o veículo **{v_del_placa}** "
+                f"({v_del['modelo'] or ''}). Esta ação não pode ser desfeita."
+            )
+
+            if st.button("Excluir veículo", type="primary", key="btn_excluir_veiculo"):
+                try:
+                    db.excluir_veiculo(int(v_del["id"]))
+                    st.success("Veículo excluído. Recarregue a página.")
+                    carregar_auxiliares.clear()
+                except Exception as e:
+                    st.error(f"Erro ao excluir: {e}")
 
     # -----------------------------------------------------------------------
     # Trocar senha
